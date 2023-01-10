@@ -9,11 +9,12 @@ import (
 	"net/url"
 )
 
-// If getting valid data it always fits into this struct.
+// response Wargaming response body fits always in this struct.
 type response struct {
 	Status string         `json:"status"`
 	Error  *ResponseError `json:"error,omitempty"`
 	Data   any            `json:"data,omitempty"`
+	Meta   any            `json:"meta,omitempty"`
 }
 
 // Client for all api requests.
@@ -25,7 +26,14 @@ type response struct {
 //	res, err := client.Wot.AccountList(context.Background(), wargaming.realmEu, "Yzne", nil)
 //	// print out
 //	if err != nil {
-//		fmt.Println(err.Error())
+//		// handle a Wargaming Response Error, returned by the API itself
+//		var respErr *wargaming.ResponseError
+//		if errors.As(err, &respErr) {
+//			fmt.Println(respErr.Error())
+//		} else {
+//			// handle client or other error
+//			fmt.Println(err.Error())
+//		}
 //	} else {
 //		for _, value := range res {
 //			fmt.Println(value)
@@ -75,7 +83,7 @@ func NewClient(applicationId string, options *ClientOptions) *Client {
 	return client
 }
 
-func (client *Client) buildRequest(ctx context.Context, section section, realm Realm, path string, data map[string]string, method string) (req *http.Request) {
+func (client *Client) buildRequest(ctx context.Context, method string, section section, realm Realm, path string, data map[string]string) (req *http.Request) {
 	query := url.Values{}
 	query.Add("application_id", client.applicationId)
 	for key, value := range data {
@@ -93,7 +101,7 @@ func (client *Client) buildRequest(ctx context.Context, section section, realm R
 	return req
 }
 
-func (client *Client) request(req *http.Request, returnData any) error {
+func (client *Client) request(req *http.Request, returnData any, metaData any) error {
 	resp, err := client.httpClient.Do(req)
 	if err != nil {
 		return err
@@ -111,6 +119,7 @@ func (client *Client) request(req *http.Request, returnData any) error {
 		Status: "",
 		Error:  nil,
 		Data:   returnData,
+		Meta:   metaData,
 	}
 	err = json.Unmarshal(respBytes, wgResp)
 	if err != nil {
@@ -126,14 +135,16 @@ func (client *Client) request(req *http.Request, returnData any) error {
 	return nil
 }
 
-// postRequest use returnData nil, if no response data is expected.
-func (client *Client) postRequest(ctx context.Context, section section, realm Realm, path string, data map[string]string, returnData any) error {
-	req := client.buildRequest(ctx, section, realm, path, data, "POST")
-	return client.request(req, returnData)
+// postRequest set returnData to nil, if no response data is expected.
+// set metaData to nil if no meta data is expected.
+func (client *Client) postRequest(ctx context.Context, section section, realm Realm, path string, data map[string]string, returnData any, metaData any) error {
+	req := client.buildRequest(ctx, "POST", section, realm, path, data)
+	return client.request(req, returnData, metaData)
 }
 
-// getRequest use returnData nil, if no response data is expected.
-func (client *Client) getRequest(ctx context.Context, section section, realm Realm, path string, data map[string]string, returnData any) error {
-	req := client.buildRequest(ctx, section, realm, path, data, "GET")
-	return client.request(req, returnData)
+// getRequest set returnData to nil, if no response data is expected.
+// set metaData to nil if no meta data is expected.
+func (client *Client) getRequest(ctx context.Context, section section, realm Realm, path string, data map[string]string, returnData any, metaData any) error {
+	req := client.buildRequest(ctx, "GET", section, realm, path, data)
+	return client.request(req, returnData, metaData)
 }
